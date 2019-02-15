@@ -62,13 +62,16 @@ solve_iter_als_softimpute = function(x, svd_current, lambda, singular_vectors = 
   x_delta = x
   # make_sparse_approximation calculates values of sparse matrix X_new = X - A %*% B
   # for only non-zero values of X
-  futile.logger::flog.debug("running 'make_sparse_approximation' for soft-impute")
+  futile.logger::flog.debug("soft-impute: 'make_sparse_approximation'")
   x_delta@x = x@x - make_sparse_approximation(x, A, B)
+  futile.logger::flog.debug("soft-impute: calculating loss")
   loss = (as.numeric(crossprod(x_delta@x)) + lambda * sum(svd_current$d)) / length(x_delta@x)
 
+  futile.logger::flog.debug("soft-impute: calculating first part of result")
   first = (x_delta %*% svd_current[[singular_vectors]]) %*% diag( sqrt(svd_current$d) / (svd_current$d + lambda))
   rm(x_delta)
 
+  futile.logger::flog.debug("soft-impute: calculating second part of result")
   second = t(A * (svd_current$d / (svd_current$d + lambda)))
   res = first + second
   data.table::setattr(res, "loss", loss)
@@ -100,15 +103,19 @@ soft_als = function(x,
   if(is.null(init)) {
     # draw random matrix and make columns orthogonal with QR decomposition
     U = matrix(rnorm(n = nrow(x) * rank), nrow = nrow(x))
-    if(is_input_float) U = float::fl(U)
+    if(is_input_float) U = fl(U)
 
     U = qr.Q(qr(U, LAPACK = TRUE))
+
+    # FIXME - to be addressed after fix in upstream https://github.com/wrathematics/float/issues/27
+    if(is_input_float) U = fl(U)
+
     # init with dummy values
     D  = rep(1, rank)
-    if(is_input_float) D = float::fl(D)
+    if(is_input_float) D = fl(D)
 
     V = matrix(rep(0, ncol(x) * rank), nrow = ncol(x))
-    if(is_input_float) V = float::fl(V)
+    if(is_input_float) V = fl(V)
 
     svd_old = list(d = D, u = U, v = V); rm(U, V)
   } else {
@@ -131,13 +138,13 @@ soft_als = function(x,
     if(target == "soft_impute") {
       futile.logger::flog.debug("running 'solve_iter_als_softimpute'")
       B_hat = solve_iter_als_softimpute(tx, svd_new, lambda, "u")
-      futile.logger::flog.debug("running 'svd_econ'")
-      Bsvd = svd_econ(B_hat %*% diag(sqrt(svd_new$d)))
+      futile.logger::flog.debug("running 'svd'")
+      Bsvd = svd(B_hat %*% diag(sqrt(svd_new$d)))
     } else if(target == "svd") {
       futile.logger::flog.debug("running 'solve_iter_als_svd'")
       B_hat = solve_iter_als_svd(tx, svd_new, lambda, "u")
-      futile.logger::flog.debug("running 'svd_econ'")
-      Bsvd = svd_econ(B_hat)
+      futile.logger::flog.debug("running 'svd'")
+      Bsvd = svd(B_hat)
     }
     rm(B_hat)
     svd_new$v = Bsvd$u
@@ -149,13 +156,13 @@ soft_als = function(x,
     if(target == "soft_impute") {
       futile.logger::flog.debug("running 'solve_iter_als_softimpute'")
       A_hat = solve_iter_als_softimpute(x, svd_new, lambda, "v")
-      futile.logger::flog.debug("running 'svd_econ'")
-      Asvd = svd_econ(A_hat %*% diag(sqrt(svd_new$d)))
+      futile.logger::flog.debug("running 'svd'")
+      Asvd = svd(A_hat %*% diag(sqrt(svd_new$d)))
     } else if(target == "svd") {
       futile.logger::flog.debug("running 'solve_iter_als_svd'")
       A_hat = solve_iter_als_svd(x, svd_new, lambda, "v")
-      futile.logger::flog.debug("running 'svd_econ'")
-      Asvd = svd_econ(A_hat)
+      futile.logger::flog.debug("running 'svd'")
+      Asvd = svd(A_hat)
     } else {
       stop(sprintf("unknown target = %s", target))
     }
@@ -208,7 +215,7 @@ soft_als = function(x,
     }
 
 
-    m_svd = svd_econ(m)
+    m_svd = svd(m)
     final_singular_values = pmax(m_svd$d - lambda, 0)
     # FIXME cast back to float because there is no pmax/pmin in float at the moment
     if(is_input_float) final_singular_values = fl(final_singular_values)

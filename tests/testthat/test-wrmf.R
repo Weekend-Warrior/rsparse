@@ -66,7 +66,7 @@ test_that("test WRMF FLOAT", {
     expect_true(inherits(user_emb, "float32"))
     expect_true(inherits(model$components, "float32"))
   }
-  }
+}
 )
 
 test_that("test WRMF extra", {

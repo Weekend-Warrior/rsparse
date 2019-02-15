@@ -2,8 +2,8 @@
 
 // [[Rcpp::export]]
 Rcpp::NumericVector cpp_make_sparse_approximation(const Rcpp::S4 &mat_template,
-                                            arma::mat& X,
-                                            arma::mat& Y,
+                                            const arma::mat& X,
+                                            const arma::mat& Y,
                                             int sparse_matrix_type,
                                             unsigned n_threads) {
   Rcpp::IntegerVector rp = mat_template.slot("p");
@@ -41,6 +41,7 @@ Rcpp::NumericVector cpp_make_sparse_approximation(const Rcpp::S4 &mat_template,
       xc = X.col(i).t();
     else
       xc = Y.col(i).t();
+
     for(int pp = p1; pp < p2; pp++) {
       uint64_t ind = (size_t)j[pp];
       if(sparse_matrix_type == CSR)
@@ -52,21 +53,6 @@ Rcpp::NumericVector cpp_make_sparse_approximation(const Rcpp::S4 &mat_template,
   }
   return(approximated_values);
 }
-
-// [[Rcpp::export]]
-Rcpp::List  arma_svd_econ(const arma::mat& X) {
-  int k = std::min(X.n_rows, X.n_cols);
-  Rcpp::NumericMatrix UR(X.n_rows, k);
-  Rcpp::NumericMatrix VR(X.n_cols, k);
-  Rcpp::NumericVector dR(k);
-  arma::mat U(UR.begin(), UR.nrow(), UR.ncol(),  false, true);
-  arma::mat V(VR.begin(), VR.nrow(), VR.ncol(),  false, true);
-  arma::vec d(dR.begin(), dR.size(),  false, true);
-  int status = svd_econ(U, d, V, X);
-  if(!status) Rcpp::stop("arma::svd_econ failed");
-  return(Rcpp::List::create(Rcpp::_["d"] = dR, Rcpp::_["u"] = UR, Rcpp::_["v"] = VR));
-}
-
 
 dMappedCSR extract_mapped_csr(Rcpp::S4 input) {
   Rcpp::IntegerVector dim = input.slot("Dim");
@@ -88,8 +74,12 @@ dMappedCSC extract_mapped_csc(Rcpp::S4 input) {
   return dMappedCSC(nrows, ncols, values.length(), (uint32_t *)row_indices.begin(), (uint32_t *)col_ptrs.begin(), values.begin());
 }
 
-uint32_t omp_thread_count() {
-  uint32_t n = 0;
+// returns number of available threads
+// omp_get_num_threads() for some reason doesn't work on all systems
+// check following link
+// http://stackoverflow.com/questions/11071116/i-got-omp-get-num-threads-always-return-1-in-gcc-works-in-icc
+int omp_thread_count() {
+  int n = 0;
   #ifdef _OPENMP
   #pragma omp parallel reduction(+:n)
   #endif
